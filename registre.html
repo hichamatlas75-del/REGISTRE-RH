@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff RH • Grey Corner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #0d0f14; font-family: 'Inter', sans-serif; color: #e2e8f0; }
+        .staff-card { background: #1a1f26; border: 1px solid rgba(255,255,255,0.05); }
+        .initials { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+        .date-badge { 
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.05);
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .badge-active { color: #10b981; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+</head>
+<body class="p-4 pb-20">
+
+    <div class="mb-8 mt-4 px-2 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-black tracking-tighter text-white">STAFF HUB</h1>
+            <p class="text-blue-400 text-[10px] font-bold uppercase tracking-widest">Registre Grey Corner</p>
+        </div>
+        <div class="text-right">
+            <div class="text-2xl font-black text-white leading-none">32</div>
+            <div class="text-[9px] font-bold text-slate-500 uppercase">Membres</div>
+        </div>
+    </div>
+
+    <div class="px-2 mb-8">
+        <input type="text" id="searchInput" onkeyup="filterStaff()" placeholder="Rechercher un nom..." 
+        class="w-full bg-[#1a1f26] border border-white/10 rounded-xl px-4 py-4 text-sm focus:outline-none focus:border-blue-500 transition-all text-white shadow-2xl">
+    </div>
+
+    <div class="staff-section mb-10" data-name="EL MCHAOURI SOUAD">
+        <h2 class="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-3 ml-2">Dernière Entrée</h2>
+        <div class="staff-card p-5 rounded-2xl border-blue-500/40 bg-gradient-to-br from-blue-600/20 to-transparent">
+            <div class="flex items-center gap-4">
+                <div class="initials bg-blue-500 text-white shadow-lg shadow-blue-500/30">SM</div>
+                <div class="flex-grow">
+                    <h3 class="font-bold text-white uppercase text-[15px]">EL MCHAOURI Souad [cite: 3]</h3>
+                    <div class="flex justify-between items-center mt-3">
+                        <span class="badge-active text-blue-400">Nouveau</span>
+                        <span class="date-badge border-blue-500/30 text-blue-100 bg-blue-500/20">07-01-2026</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="activeList" class="space-y-3">
+        <h2 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-2">Collaborateurs Actifs</h2>
+        
+        <script>
+            const activeStaff = [
+                {n: "QUASSIR Hicham", d: "01-01-2025", i: "QH"},
+                {n: "BENKHADA Abdesslam", d: "01-01-2025", i: "AB"},
+                {n: "SALIL Houda", d: "01-01-2025", i: "SH"},
+                {n: "CHKAIRI Youssef", d: "01-01-2025", i: "YC"},
+                {n: "EL KOBBI Mostafa", d: "01-09-2025", i: "MK"},
+                {n: "FILALI HADIK Abderrafie", d: "14-11-2025", i: "AF"},
+                {n: "KHALOUQ Rachid", d: "01-01-2025", i: "RK"},
+                {n: "SBAI Hakima", d: "01-01-2025", i: "HS"},
+                {n: "BOUAID Mina", d: "07-11-2025", i: "MB"},
+                {n: "EL-GORRAMY Souad", d: "18-12-2025", i: "ES"},
+                {n: "BOUCHNAK Naoual", d: "01-01-2025", i: "NB"},
+                {n: "ZAIR Fatima", d: "01-01-2025", i: "FZ"},
+                {n: "BELQASIM Khaoula", d: "01-01-2025", i: "BK"},
+                {n: "MOUJAHID Imane", d: "25-09-2025", i: "MI"},
+                {n: "IDRISSI OUDGHRI Saad", d: "01-05-2025", i: "SI"},
+                {n: "MAJDOUB Jihane", d: "27-10-2025", i: "MJ"},
+                {n: "BOURAHMA Anas", d: "04-11-2025", i: "BA"},
+                {n: "LAMSSIEH Jawad", d: "01-11-2025", i: "LJ"},
+                {n: "EN-NHAILI Soumia", d: "01-01-2025", i: "SN"},
+                {n: "HATTAF Mohammed", d: "25-12-2025", i: "HM"},
+                {n: "HAMID ALAOUI Abdelaziz", d: "01-01-2025", i: "HA"},
+                {n: "KAFOUNI Zakariae", d: "15-06-2025", i: "KZ"},
+                {n: "MOHSSINE Youness", d: "15-09-2025", i: "MY"},
+                {n: "HIDARA-LACHKAR Youssef", d: "01-01-2025", i: "YH"},
+                {n: "El MOUDENE El hassan", d: "01-01-2025", i: "EH"},
+                {n: "El MOBARAKI Mohamed", d: "01-01-2025", i: "MM"},
+                {n: "TOUATI Omar", d: "20-10-2025", i: "TO"},
+                {n: "JIRA Mohamed", d: "01-09-2025", i: "JM"}
+            ];
+
+            activeStaff.forEach(p => {
+                document.write(`
+                    <div class="staff-section staff-card p-4 rounded-2xl flex items-center gap-4" data-name="${p.n.toUpperCase()}">
+                        <div class="initials bg-slate-800 text-slate-400 text-xs">${p.i}</div>
+                        <div class="flex-grow">
+                            <h3 class="font-bold text-slate-200 uppercase text-[13px] tracking-tight">${p.n}</h3>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="badge-active">● Actif</span>
+                                <span class="date-badge">${p.d}</span>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            });
+        </script>
+    </div>
+
+    <div id="archiveList" class="mt-12 space-y-3 pb-20">
+        <h2 class="text-[10px] font-bold text-red-500/50 uppercase tracking-[0.2em] mb-4 ml-2 border-b border-red-500/10 pb-2">Archives / Sorties 2025</h2>
+        
+        <script>
+            const archiveStaff = [
+                {n: "EL MAROUNI Abdelati", s: "15-11-2025", i: "MA"},
+                {n: "MDAGHRI ALAOUI Fatimzahra", s: "16-12-2025", i: "MF"},
+                {n: "LAAZIZI Hafida", s: "17-12-2025", i: "LH"},
+                {n: "FILALI Zineb", s: "31-12-2025", i: "FZ"},
+                {n: "LABRAHMI Adham", s: "30-11-2025", i: "LA"},
+                {n: "GABOULI Aymen", s: "21-12-2025", i: "GA"}
+            ];
+
+            archiveStaff.forEach(p => {
+                document.write(`
+                    <div class="staff-section staff-card p-4 rounded-2xl opacity-40 bg-black/20 flex items-center gap-4 border-dashed border-white/10" data-name="${p.n.toUpperCase()}">
+                        <div class="flex-grow">
+                            <h3 class="font-bold text-slate-400 uppercase text-[12px]">${p.n} [cite: 3]</h3>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="text-[9px] text-red-500 font-black uppercase italic">Départ</span>
+                                <span class="date-badge border-red-500/20 text-red-400 bg-red-500/5">${p.s}</span>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            });
+        </script>
+    </div>
+
+    <script>
+        function filterStaff() {
+            let input = document.getElementById('searchInput').value.toUpperCase();
+            let cards = document.getElementsByClassName('staff-section');
+            for (let i = 0; i < cards.length; i++) {
+                let name = cards[i].getAttribute('data-name') || "";
+                cards[i].style.display = name.includes(input) ? "" : "none";
+            }
+        }
+    </script>
+</body>
+</html>
