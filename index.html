@@ -41,22 +41,6 @@
         class="w-full bg-[#1a1f26] border border-white/10 rounded-xl px-4 py-4 text-sm focus:outline-none focus:border-blue-500 transition-all text-white shadow-2xl">
     </div>
 
-    <div class="staff-section mb-10" data-name="EL MCHAOURI SOUAD">
-        <h2 class="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-3 ml-2">Dernière Entrée</h2>
-        <div class="staff-card p-5 rounded-2xl border-blue-500/40 bg-gradient-to-br from-blue-600/20 to-transparent">
-            <div class="flex items-center gap-4">
-                <div class="initials bg-blue-500 text-white shadow-lg shadow-blue-500/30">SM</div>
-                <div class="flex-grow">
-                    <h3 class="font-bold text-white uppercase text-[15px]">EL MCHAOURI Souad</h3>
-                    <div class="flex justify-between items-center mt-3">
-                        <span class="badge-active text-blue-400">Nouveau</span>
-                        <span class="date-badge border-blue-500/30 text-blue-100 bg-blue-500/20">07-01-2026</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div id="activeContainer" class="space-y-3">
         <h2 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 ml-2">Collaborateurs Actifs</h2>
         <div id="activeList" class="space-y-3"></div>
@@ -68,10 +52,12 @@
     </div>
 
     <script>
-        /* DATA FACILE À MODIFIER 
+        /* DATA CENTRALISÉE
            d = date entrée, s = date sortie, i = initiales, n = nom
         */
         const activeStaff = [
+            {n: "EL MCHAOURI Souad", d: "07-01-2026", i: "SM"},
+            {n: "GUETIBI Mohamed Amine", d: "08-01-2026", i: "GA"},
             {n: "QUASSIR Hicham", d: "01-01-2025", i: "QH"},
             {n: "BENKHADA Abdesslam", d: "01-01-2025", i: "AB"},
             {n: "SALIL Houda", d: "01-01-2025", i: "SH"},
@@ -91,7 +77,7 @@
             {n: "BOURAHMA Anas", d: "04-11-2025", i: "BA"},
             {n: "LAMSSIEH Jawad", d: "01-11-2025", i: "LJ"},
             {n: "EN-NHAILI Soumia", d: "01-01-2025", i: "SN"},
-            {n: "GUETIBI Mohamed Amine", d: "08-01-2026", i: "GA"},
+            {n: "GUETIBI Mohammed Amine", d: "01-01-2026", i: "GA"},
             {n: "HATTAF Mohammed", d: "25-12-2025", i: "HM"},
             {n: "HAMID ALAOUI Abdelaziz", d: "01-01-2025", i: "HA"},
             {n: "MOHSSINE Youness", d: "15-09-2025", i: "MY"},
@@ -112,7 +98,6 @@
             {n: "GABOULI Aymen", s: "21-12-2025", i: "GA"}
         ];
 
-        // Rendu automatique
         function render() {
             const activeHTML = activeStaff.map(p => `
                 <div class="staff-section staff-card p-4 rounded-2xl flex items-center gap-4" data-name="${p.n.toUpperCase()}">
@@ -141,7 +126,7 @@
 
             document.getElementById('activeList').innerHTML = activeHTML;
             document.getElementById('archiveList').innerHTML = archiveHTML;
-            document.getElementById('memberCount').innerText = activeStaff.length + 1; // +1 pour la dernière entrée
+            document.getElementById('memberCount').innerText = activeStaff.length;
         }
 
         function filterStaff() {
