@@ -7,6 +7,7 @@
     <title>Staff RH • Grey Corner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -213,56 +214,105 @@
 
             const downloadPDF = () => {
                 const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
+                const doc = new jsPDF('p', 'mm', 'a4');
                 const today = new Date().toLocaleDateString('fr-FR');
                 
-                // Titre
+                // En-tête professionnel
+                doc.setFillColor(245, 245, 245);
+                doc.rect(0, 0, 210, 40, 'F');
+                
                 doc.setFontSize(22);
-                doc.setTextColor(20, 20, 20);
-                doc.text("Registre du Personnel", 20, 20);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(33, 37, 41);
+                doc.text("REGISTRE UNIQUE DU PERSONNEL", 15, 20);
                 
                 doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
                 doc.setTextColor(100, 100, 100);
-                doc.text("Grey Corner • Généré le " + today, 20, 28);
+                doc.text("Société : Grey Corner", 15, 28);
+                doc.text("Date d'édition : " + today, 15, 33);
                 
-                let y = 40;
-                
-                // Parcourir les départements
-                DEPARTMENTS.forEach(dept => {
-                    const members = ACTIVE_STAFF.filter(m => m.department === dept);
-                    if (members.length > 0) {
-                        if (y > 260) { doc.addPage(); y = 20; }
-                        
-                        doc.setFontSize(14);
-                        doc.setTextColor(59, 130, 246);
-                        doc.text(dept.toUpperCase(), 20, y);
-                        y += 10;
-                        
-                        doc.setFontSize(9);
-                        doc.setTextColor(80, 80, 80);
-                        
-                        members.forEach(m => {
-                            if (y > 280) { doc.addPage(); y = 20; }
-                            doc.text(`${m.name.padEnd(40)} | ${m.role.padEnd(25)} | Entrée: ${m.entryDate}`, 20, y);
-                            y += 7;
-                        });
-                        y += 10;
-                    }
-                });
-                
-                // Archives
-                if (y > 240) { doc.addPage(); y = 20; }
+                // Section Personnel Actif
                 doc.setFontSize(14);
-                doc.setTextColor(150, 150, 150);
-                doc.text("ARCHIVES", 20, y);
-                y += 10;
-                doc.setFontSize(9);
-                doc.setTextColor(150, 150, 150);
-                ARCHIVED_STAFF.forEach(m => {
-                    if (y > 280) { doc.addPage(); y = 20; }
-                    doc.text(`${m.name.padEnd(40)} | Entrée: ${m.entryDate} | Sortie: ${m.exitDate}`, 20, y);
-                    y += 7;
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(59, 130, 246);
+                doc.text("I. EFFECTIF ACTIF", 15, 52);
+
+                const activeTableData = ACTIVE_STAFF.map(m => [
+                    m.name,
+                    m.role,
+                    m.department,
+                    m.entryDate
+                ]);
+
+                doc.autoTable({
+                    startY: 58,
+                    head: [['NOM & PRÉNOM', 'FONCTION', 'DÉPARTEMENT', 'DATE D\'ENTRÉE']],
+                    body: activeTableData,
+                    theme: 'striped',
+                    headStyles: { 
+                        fillColor: [59, 130, 246], 
+                        fontSize: 9, 
+                        halign: 'center',
+                        fontStyle: 'bold' 
+                    },
+                    bodyStyles: { fontSize: 8, textColor: [50, 50, 50] },
+                    alternateRowStyles: { fillColor: [249, 250, 251] },
+                    columnStyles: {
+                        0: { fontStyle: 'bold', cellWidth: 60 },
+                        1: { cellWidth: 45 },
+                        2: { cellWidth: 40 },
+                        3: { halign: 'center' }
+                    },
+                    margin: { left: 15, right: 15 }
                 });
+
+                // Section Personnel Sorti (Archives)
+                const finalY = doc.lastAutoTable.finalY + 15;
+                
+                if (finalY > 240) { doc.addPage(); }
+                
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(107, 114, 128);
+                doc.text("II. PERSONNEL SORTI (ARCHIVES)", 15, finalY > 240 ? 20 : finalY);
+
+                const archivedTableData = ARCHIVED_STAFF.map(m => [
+                    m.name,
+                    m.entryDate,
+                    m.exitDate,
+                    "Sorti"
+                ]);
+
+                doc.autoTable({
+                    startY: (finalY > 240 ? 26 : finalY + 6),
+                    head: [['NOM & PRÉNOM', 'DATE D\'ENTRÉE', 'DATE DE SORTIE', 'STATUT']],
+                    body: archivedTableData,
+                    theme: 'grid',
+                    headStyles: { 
+                        fillColor: [107, 114, 128], 
+                        fontSize: 9, 
+                        halign: 'center',
+                        fontStyle: 'bold' 
+                    },
+                    bodyStyles: { fontSize: 8, textColor: [100, 100, 100] },
+                    columnStyles: {
+                        0: { fontStyle: 'bold', cellWidth: 70 },
+                        1: { halign: 'center' },
+                        2: { halign: 'center' },
+                        3: { halign: 'center' }
+                    },
+                    margin: { left: 15, right: 15 }
+                });
+
+                // Footer pagination
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`Page ${i} sur ${pageCount}`, 195, 285, { align: 'right' });
+                }
 
                 doc.save(`Registre_Personnel_GreyCorner_${new Date().toISOString().split('T')[0]}.pdf`);
             };
