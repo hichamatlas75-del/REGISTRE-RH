@@ -419,15 +419,36 @@ const Toast = ({ msg, type }) => {
 
 // ---------- APP ----------
 const App = () => {
-    const [activeStaff,   setActiveStaff]   = useState(INITIAL_ACTIVE);
-    const [archivedStaff, setArchivedStaff] = useState(INITIAL_ARCHIVED);
+    const [activeStaff, setActiveStaff] = useState(() => {
+        try {
+            const saved = localStorage.getItem('gc_active_staff');
+            return saved ? JSON.parse(saved) : INITIAL_ACTIVE;
+        } catch { return INITIAL_ACTIVE; }
+    });
+
+    const [archivedStaff, setArchivedStaff] = useState(() => {
+        try {
+            const saved = localStorage.getItem('gc_archived_staff');
+            return saved ? JSON.parse(saved) : INITIAL_ARCHIVED;
+        } catch { return INITIAL_ARCHIVED; }
+    });
+
     const [search, setSearch]   = useState('');
     const [theme,  setTheme]    = useState('dark');
     const [showAdd,     setShowAdd]     = useState(false);
-    const [archiveMember, setArchiveMember] = useState(null); // member to archive
+    const [archiveMember, setArchiveMember] = useState(null);
     const [toast, setToast] = useState(null);
 
     useEffect(() => { document.body.className = theme; }, [theme]);
+
+    // Persist to localStorage on every change
+    useEffect(() => {
+        try { localStorage.setItem('gc_active_staff', JSON.stringify(activeStaff)); } catch {}
+    }, [activeStaff]);
+
+    useEffect(() => {
+        try { localStorage.setItem('gc_archived_staff', JSON.stringify(archivedStaff)); } catch {}
+    }, [archivedStaff]);
 
     const showToast = (msg, type='success') => {
         setToast({ msg, type });
