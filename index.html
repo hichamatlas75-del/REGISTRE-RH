@@ -81,7 +81,7 @@
 <div id="root"></div>
 
 <script type="module">
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
 // --- CONSTANTES ---
@@ -435,23 +435,24 @@ const App = () => {
     };
 
     // Add new member
-    const handleAdd = useCallback(member => {
+    const handleAdd = (member) => {
         setActiveStaff(prev => [...prev, member]);
         showToast(`${member.name} ajouté avec succès.`, 'success');
-    }, []);
+    };
 
     // Archive member
-    const handleArchiveConfirm = useCallback((member, exitDate) => {
-        setActiveStaff(prev => prev.filter(m => m.id !== member.id));
-        setArchivedStaff(prev => [{
-            id: 'arch_' + member.id,
+    const handleArchiveConfirm = (member, exitDate) => {
+        const archived = {
+            id: 'arch_' + member.id + '_' + Date.now(),
             name: member.name,
             entryDate: member.entryDate,
-            exitDate,
+            exitDate: exitDate,
             role: member.role || "Ancien Collaborateur"
-        }, ...prev]);
+        };
+        setActiveStaff(prev => prev.filter(m => m.id !== member.id));
+        setArchivedStaff(prev => [archived, ...prev]);
         showToast(`${member.name} archivé.`, 'info');
-    }, []);
+    };
 
     const filteredStaff = useMemo(() => {
         if (!search) return activeStaff;
@@ -576,12 +577,14 @@ const App = () => {
                         React.createElement('p',  { className:"text-slate-400 dark:text-slate-500 text-sm font-medium" }, `Aucun collaborateur trouvé pour "${search}"`)
                     ])
                 ]),
-                filteredArchive.length>0 && React.createElement('section', { key:'arch', className:"mt-20 pt-10 border-t border-slate-200 dark:border-white/5" }, [
-                    React.createElement(SectionHeader, { title:`Archives (Sorties) — ${filteredArchive.length}`, variant:"archive" }),
-                    React.createElement('div', { className:"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" },
-                        filteredArchive.map(m => React.createElement(ArchiveCard, { key:m.id, member:m }))
-                    )
-                ])
+                filteredArchive.length > 0
+                    ? React.createElement('section', { key:'arch', className:"mt-20 pt-10 border-t border-slate-200 dark:border-white/5" }, [
+                        React.createElement(SectionHeader, { key:'sh', title:`Archives (Sorties) — ${filteredArchive.length}`, variant:"archive" }),
+                        React.createElement('div', { key:'grid', className:"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" },
+                            filteredArchive.map(m => React.createElement(ArchiveCard, { key: m.id, member: m }))
+                        )
+                      ])
+                    : null
             ])
         ]),
 
