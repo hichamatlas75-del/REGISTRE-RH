@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -11,42 +10,62 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-primary: #0f1115;
-            --text-primary: #e2e8f0;
+        :root { --bg-primary: #0f1115; --text-primary: #e2e8f0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-primary); color: var(--text-primary); margin: 0; -webkit-font-smoothing: antialiased; transition: background-color 0.3s ease, color 0.3s ease; }
+        body.light { --bg-primary: #f1f5f9; --text-primary: #1e293b; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Modal animations */
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95) translateY(8px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
         }
-        
-        body {
+        @keyframes overlayIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        .modal-overlay { animation: overlayIn 0.2s ease; }
+        .modal-content { animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* Hover reveal on StaffCard */
+        .staff-card-actions { opacity: 0; transition: opacity 0.2s ease; }
+        .group:hover .staff-card-actions { opacity: 1; }
+
+        /* Input styling */
+        .gc-input {
+            background: #1a1f26;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #e2e8f0;
+            font-size: 12px;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.2s;
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            margin: 0;
-            -webkit-font-smoothing: antialiased;
-            transition: background-color 0.3s ease, color 0.3s ease;
         }
+        .gc-input:focus { border-color: rgba(59,130,246,0.5); box-shadow: 0 0 0 3px rgba(59,130,246,0.08); }
+        body.light .gc-input { background: #fff; border-color: #e2e8f0; color: #1e293b; }
+        body.light .gc-input:focus { border-color: rgba(59,130,246,0.5); }
 
-        body.light {
-            --bg-primary: #f1f5f9;
-            --text-primary: #1e293b;
-        }
+        select.gc-input option { background: #1a1f26; }
+        body.light select.gc-input option { background: #fff; }
 
-        .font-mono {
-            font-family: 'JetBrains Mono', monospace;
+        /* Toast */
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
-
-        ::-webkit-scrollbar {
-            width: 8px;
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateY(0); }
+            to   { opacity: 0; transform: translateY(12px); }
         }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
+        .toast { animation: toastIn 0.3s ease; }
+        .toast.hiding { animation: toastOut 0.3s ease forwards; }
     </style>
     <script type="importmap">
     {
@@ -59,351 +78,534 @@
     </script>
 </head>
 <body class="dark">
-    <div id="root"></div>
+<div id="root"></div>
 
-    <script type="module">
-        import React, { useState, useMemo, useEffect } from 'react';
-        import ReactDOM from 'react-dom/client';
+<script type="module">
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
 
-        // --- TYPES & CONSTANTES ---
-        const Department = {
-            Management: "Management",
-            Caisse: "Caisse",
-            Bar: "Bar",
-            Cuisine: "Cuisine",
-            Service: "Service",
-            Menage: "Ménage",
-            Securite: "Sécurité"
+// --- CONSTANTES ---
+const Department = {
+    Management: "Management", Caisse: "Caisse", Bar: "Bar",
+    Cuisine: "Cuisine", Service: "Service", Menage: "Ménage", Securite: "Sécurité"
+};
+const DEPARTMENTS = Object.values(Department);
+const ROLES_BY_DEPT = {
+    Management: ["Chef de salle", "Manager", "Directeur", "Responsable RH"],
+    Caisse: ["Caisse", "Economat", "Comptable"],
+    Bar: ["Barman", "Chef Barman", "Runner Bar"],
+    Cuisine: ["Chef Cuisine", "Cuisine", "Commis", "Plongeur"],
+    Service: ["Serveur", "Chef de rang", "Runner"],
+    Ménage: ["Femme de ménage", "Agent d'entretien"],
+    Sécurité: ["Sécurité", "Chauffeur", "Agent de sécurité"]
+};
+
+const genInitials = name => {
+    const parts = name.trim().toUpperCase().split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0,2);
+    return parts[0][0] + parts[parts.length-1][0];
+};
+
+const today = () => new Date().toISOString().split('T')[0];
+
+const INITIAL_ACTIVE = [
+    { id:"1",  name:"QUASSIR Hicham",          department:Department.Management, role:"Chef de salle",      entryDate:"2025-01-01", initials:"QH" },
+    { id:"2",  name:"BENKHADA Abdesslam",       department:Department.Caisse,     role:"Caisse",             entryDate:"2025-01-01", initials:"AB" },
+    { id:"3",  name:"SALIL Houda",              department:Department.Caisse,     role:"Caisse",             entryDate:"2025-01-01", initials:"SH" },
+    { id:"4",  name:"EN-NHAILI Soumia",         department:Department.Caisse,     role:"Economat",           entryDate:"2025-01-01", initials:"SN" },
+    { id:"5",  name:"CHKAIRI Youssef",          department:Department.Bar,        role:"Barman",             entryDate:"2025-01-01", initials:"YC" },
+    { id:"6",  name:"EL KOBBI Mostafa",         department:Department.Bar,        role:"Barman",             entryDate:"2025-09-01", initials:"MK" },
+    { id:"7",  name:"FILALI HADIK Abderrafie",  department:Department.Bar,        role:"Barman",             entryDate:"2025-11-14", initials:"AF" },
+    { id:"8",  name:"KHALOUQ Rachid",           department:Department.Bar,        role:"Barman",             entryDate:"2025-01-01", initials:"RK" },
+    { id:"9",  name:"BOUCHNAK Naoual",          department:Department.Cuisine,    role:"Chef Cuisine",       entryDate:"2025-01-01", initials:"NB" },
+    { id:"10", name:"ZAIR Fatima",              department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-01-01", initials:"FZ" },
+    { id:"11", name:"BELQASIM Khaoula",         department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-01-01", initials:"BK" },
+    { id:"12", name:"MOUJAHID Imane",           department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-09-25", initials:"MI" },
+    { id:"13", name:"IDRISSI OUDGHRI Saad",     department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-05-01", initials:"SI" },
+    { id:"14", name:"MAJDOUB Jihane",           department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-10-27", initials:"MJ" },
+    { id:"15", name:"LAMSSIEH Jawad",           department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-11-01", initials:"LJ" },
+    { id:"16", name:"BOURAHMA Anas",            department:Department.Cuisine,    role:"Cuisine",            entryDate:"2025-11-04", initials:"BA" },
+    { id:"17", name:"HATTAF Mohammed",          department:Department.Service,    role:"Serveur",            entryDate:"2025-12-25", initials:"HM" },
+    { id:"18", name:"HAMID ALAOUI Abdelaziz",   department:Department.Service,    role:"Serveur",            entryDate:"2025-01-01", initials:"HA" },
+    { id:"19", name:"IBN ABBOU OUSSAMA",        department:Department.Service,    role:"Serveur",            entryDate:"2026-03-10", initials:"IO" },
+    { id:"20", name:"MOHSSINE Youness",         department:Department.Service,    role:"Serveur",            entryDate:"2025-09-15", initials:"MY" },
+    { id:"21", name:"HIDARA-LACHKAR Youssef",   department:Department.Service,    role:"Serveur",            entryDate:"2025-01-01", initials:"YH" },
+    { id:"22", name:"KAFOUNI Zakariae",         department:Department.Service,    role:"Serveur",            entryDate:"2025-06-15", initials:"KZ" },
+    { id:"23", name:"EL-GORRAMY Anissa",        department:Department.Menage,     role:"Femme de ménage",    entryDate:"2026-01-01", initials:"EA" },
+    { id:"24", name:"EL-GORRAMY SOUAD",         department:Department.Menage,     role:"Femme de ménage",    entryDate:"2025-12-18", initials:"ES" },
+    { id:"25", name:"EL MCHAOURI SOUAD",        department:Department.Menage,     role:"Femme de ménage",    entryDate:"2026-01-07", initials:"MS" },
+    { id:"26", name:"SBAI Hakima",              department:Department.Menage,     role:"Femme de ménage",    entryDate:"2025-01-01", initials:"SH" },
+    { id:"27", name:"EL MOBARAKI Mohamed",      department:Department.Securite,   role:"Sécurité",           entryDate:"2025-01-01", initials:"MM" },
+    { id:"28", name:"TOUATI OMAR",              department:Department.Securite,   role:"Sécurité",           entryDate:"2025-10-20", initials:"TO" },
+    { id:"29", name:"JIRA MOHAMED",             department:Department.Securite,   role:"Chauffeur",          entryDate:"2025-09-01", initials:"JM" }
+];
+
+const INITIAL_ARCHIVED = [
+    { id:"a1", name:"EL MAROUNI Abdelati",          entryDate:"2025-03-01", exitDate:"2025-11-15", role:"Ancien Collaborateur" },
+    { id:"a2", name:"MDAGHRI ALAOUI Fatimzahra",    entryDate:"2025-07-15", exitDate:"2025-12-16", role:"Ancien Collaborateur" },
+    { id:"a3", name:"LAAZIZI Hafida",               entryDate:"2025-08-01", exitDate:"2025-12-17", role:"Ancien Collaborateur" },
+    { id:"a4", name:"BOUAID Mina",                  entryDate:"2025-11-07", exitDate:"2025-12-25", role:"Ancien Collaborateur" },
+    { id:"a5", name:"FILALI Zineb",                 entryDate:"2025-12-21", exitDate:"2025-12-31", role:"Ancien Collaborateur" },
+    { id:"a6", name:"LABRAHMI Adham",               entryDate:"2025-11-17", exitDate:"2025-11-30", role:"Ancien Collaborateur" },
+    { id:"a7", name:"GABOULI Aymen",                entryDate:"2025-10-05", exitDate:"2025-12-21", role:"Ancien Collaborateur" },
+    { id:"a8", name:"EL MOUDENE El Hassan",         entryDate:"2025-01-01", exitDate:"2026-01-31", role:"Ancien Collaborateur" },
+    { id:"a9", name:"GUETIBI Amine",                entryDate:"2026-01-01", exitDate:"2026-03-31", role:"Ancien Collaborateur" }
+];
+
+// ---------- SUB-COMPONENTS ----------
+
+const DateBadge = ({ date, variant='entry' }) => {
+    const styles = {
+        entry:   'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+        exit:    'bg-rose-500/10 text-rose-400 border-rose-500/20',
+        neutral: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+    };
+    return React.createElement('span', {
+        className: `font-mono text-[10px] font-bold px-2 py-0.5 rounded border ${styles[variant]} whitespace-nowrap`
+    }, date);
+};
+
+const SectionHeader = ({ title, variant='primary' }) => {
+    const v = {
+        primary: 'border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 dark:from-slate-800/80 to-transparent',
+        archive: 'border-l-4 border-slate-400 dark:border-gray-500 bg-gradient-to-r from-slate-100 dark:from-gray-800/80 to-transparent',
+    };
+    return React.createElement('div', { className: `px-4 py-2 my-6 rounded-r-lg ${v[variant]}` },
+        React.createElement('h2', {
+            className: `text-[11px] font-black uppercase tracking-widest ${variant==='primary' ? 'text-slate-800 dark:text-white' : 'text-slate-500 dark:text-gray-400'}`
+        }, title)
+    );
+};
+
+// StaffCard with archive button
+const StaffCard = ({ member, onArchive }) => {
+    return React.createElement('div', {
+        className: "group relative bg-white dark:bg-[#1a1f26] border border-slate-200 dark:border-white/5 p-4 rounded-xl flex items-center gap-4 transition-all duration-300 hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 dark:hover:shadow-blue-500/10 hover:-translate-y-0.5 shadow-sm"
+    }, [
+        // Initials
+        React.createElement('div', {
+            key: 'initials',
+            className: "w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center font-bold text-xs text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-white/5 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-colors shrink-0"
+        }, member.initials),
+
+        // Info
+        React.createElement('div', { key: 'info', className: "flex-grow min-w-0" }, [
+            React.createElement('h3', { key:'name', className:"font-bold text-slate-800 dark:text-slate-200 uppercase text-[11px] tracking-tight truncate" }, member.name),
+            React.createElement('p',  { key:'role', className:"text-[9px] text-slate-500 font-medium mb-2 truncate" }, member.role),
+            React.createElement('div',{ key:'footer', className:"flex justify-between items-center gap-2" }, [
+                React.createElement('span', { key:'lbl', className:"text-[8px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-tighter" }, "Entrée"),
+                React.createElement(DateBadge, { key:'date', date: member.entryDate, variant:'entry' })
+            ])
+        ]),
+
+        // Archive button (visible on hover)
+        React.createElement('button', {
+            key: 'arch-btn',
+            onClick: () => onArchive(member),
+            title: "Archiver ce collaborateur",
+            className: "staff-card-actions absolute top-2 right-2 w-6 h-6 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:text-rose-300 transition-colors"
+        }, React.createElement('i', { className: "fa-solid fa-box-archive text-[9px]" }))
+    ]);
+};
+
+const ArchiveCard = ({ member }) => {
+    return React.createElement('div', {
+        className: "bg-slate-50 dark:bg-[#111418] border border-slate-200 dark:border-white/5 p-4 rounded-xl flex flex-col gap-3 transition-all opacity-80 hover:opacity-100 shadow-sm hover:shadow-md"
+    }, [
+        React.createElement('h3', { key:'name', className:"font-bold text-slate-500 dark:text-gray-400 uppercase text-[11px] tracking-tight border-b border-slate-200 dark:border-white/5 pb-2 truncate" }, member.name),
+        React.createElement('div', { key:'dates', className:"space-y-2" }, [
+            React.createElement('div', { key:'entry', className:"flex justify-between items-center gap-2" }, [
+                React.createElement('span', { className:"text-[8px] font-black text-slate-400 dark:text-gray-600 uppercase" }, "Entrée"),
+                React.createElement(DateBadge, { date: member.entryDate, variant:'neutral' })
+            ]),
+            React.createElement('div', { key:'exit', className:"flex justify-between items-center gap-2" }, [
+                React.createElement('span', { className:"text-[8px] font-black text-rose-500 dark:text-rose-800 uppercase" }, "Sortie"),
+                React.createElement(DateBadge, { date: member.exitDate, variant:'exit' })
+            ])
+        ])
+    ]);
+};
+
+// ---------- MODAL ADD ----------
+const ModalAdd = ({ onClose, onAdd }) => {
+    const [form, setForm] = useState({ name:'', department: DEPARTMENTS[0], role:'', entryDate: today() });
+    const [error, setError] = useState('');
+    const availableRoles = ROLES_BY_DEPT[form.department] || [];
+
+    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleDeptChange = v => {
+        const roles = ROLES_BY_DEPT[v] || [];
+        setForm(f => ({ ...f, department: v, role: roles[0] || '' }));
+    };
+
+    const handleSubmit = () => {
+        if (!form.name.trim()) { setError("Le nom est obligatoire."); return; }
+        if (!form.role.trim()) { setError("Le rôle est obligatoire."); return; }
+        if (!form.entryDate)   { setError("La date d'entrée est obligatoire."); return; }
+        const newMember = {
+            id: 'u_' + Date.now(),
+            name: form.name.trim().toUpperCase(),
+            department: form.department,
+            role: form.role.trim(),
+            entryDate: form.entryDate,
+            initials: genInitials(form.name)
         };
+        onAdd(newMember);
+        onClose();
+    };
 
-        const DEPARTMENTS = Object.values(Department);
+    const labelCls = "block text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1.5";
 
-        const ACTIVE_STAFF = [
-            { id: "1", name: "QUASSIR Hicham", department: Department.Management, role: "Chef de salle", entryDate: "2025-01-01", initials: "QH" },
-            { id: "2", name: "BENKHADA Abdesslam", department: Department.Caisse, role: "Caisse", entryDate: "2025-01-01", initials: "AB" },
-            { id: "3", name: "SALIL Houda", department: Department.Caisse, role: "Caisse", entryDate: "2025-01-01", initials: "SH" },
-            { id: "4", name: "EN-NHAILI Soumia", department: Department.Caisse, role: "Economat", entryDate: "2025-01-01", initials: "SN" },
-            { id: "5", name: "CHKAIRI Youssef", department: Department.Bar, role: "Barman", entryDate: "2025-01-01", initials: "YC" },
-            { id: "6", name: "EL KOBBI Mostafa", department: Department.Bar, role: "Barman", entryDate: "2025-09-01", initials: "MK" },
-            { id: "7", name: "FILALI HADIK Abderrafie", department: Department.Bar, role: "Barman", entryDate: "2025-11-14", initials: "AF" },
-            { id: "8", name: "KHALOUQ Rachid", department: Department.Bar, role: "Barman", entryDate: "2025-01-01", initials: "RK" },
-            { id: "9", name: "BOUCHNAK Naoual", department: Department.Cuisine, role: "Chef Cuisine", entryDate: "2025-01-01", initials: "NB" },
-            { id: "10", name: "ZAIR Fatima", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-01-01", initials: "FZ" },
-            { id: "11", name: "BELQASIM Khaoula", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-01-01", initials: "BK" },
-            { id: "12", name: "MOUJAHID Imane", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-09-25", initials: "MI" },
-            { id: "13", name: "IDRISSI OUDGHRI Saad", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-05-01", initials: "SI" },
-            { id: "14", name: "MAJDOUB Jihane", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-10-27", initials: "MJ" },
-            { id: "15", name: "LAMSSIEH Jawad", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-11-01", initials: "LJ" },
-            { id: "16", name: "BOURAHMA Anas", department: Department.Cuisine, role: "Cuisine", entryDate: "2025-11-04", initials: "BA" },
-            { id: "17", name: "HATTAF Mohammed", department: Department.Service, role: "Serveur", entryDate: "2025-12-25", initials: "HM" },
-            { id: "18", name: "HAMID ALAOUI Abdelaziz", department: Department.Service, role: "Serveur", entryDate: "2025-01-01", initials: "HA" },
-            { id: "19", name: "IBN ABBOU OUSSAMA", department: Department.Service, role: "Serveur", entryDate: "2026-03-10", initials: "IO" },
-            { id: "20", name: "MOHSSINE Youness", department: Department.Service, role: "Serveur", entryDate: "2025-09-15", initials: "MY" },
-            { id: "21", name: "HIDARA-LACHKAR Youssef", department: Department.Service, role: "Serveur", entryDate: "2025-01-01", initials: "YH" },
-            { id: "22", name: "KAFOUNI Zakariae", department: Department.Service, role: "Serveur", entryDate: "2025-06-15", initials: "KZ" },
-            { id: "23", name: "EL-GORRAMY Anissa", department: Department.Menage, role: "Femme de ménage", entryDate: "2026-01-01", initials: "EA" },
-            { id: "24", name: "EL-GORRAMY SOUAD", department: Department.Menage, role: "Femme de ménage", entryDate: "2025-12-18", initials: "ES" },
-            { id: "25", name: "EL MCHAOURI SOUAD", department: Department.Menage, role: "Femme de ménage", entryDate: "2026-01-07", initials: "MS" },
-            { id: "26", name: "SBAI Hakima", department: Department.Menage, role: "Femme de ménage", entryDate: "2025-01-01", initials: "SH" },
-            { id: "27", name: "EL MOBARAKI Mohamed", department: Department.Securite, role: "Sécurité", entryDate: "2025-01-01", initials: "MM" },
-            { id: "28", name: "TOUATI OMAR", department: Department.Securite, role: "Sécurité", entryDate: "2025-10-20", initials: "TO" },
-            { id: "29", name: "JIRA MOHAMED", department: Department.Securite, role: "Chauffeur", entryDate: "2025-09-01", initials: "JM" }
-        ];
+    return React.createElement('div', {
+        className: "modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4",
+        style: { background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' },
+        onClick: e => { if(e.target === e.currentTarget) onClose(); }
+    },
+        React.createElement('div', {
+            className: "modal-content bg-white dark:bg-[#161b23] border border-slate-200 dark:border-white/8 rounded-2xl w-full max-w-md shadow-2xl"
+        }, [
+            // Header
+            React.createElement('div', { key:'hd', className:"flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/5" }, [
+                React.createElement('div', { key:'ttl' }, [
+                    React.createElement('h2', { className:"text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight" }, "Nouveau collaborateur"),
+                    React.createElement('p',  { className:"text-[9px] text-slate-400 mt-0.5" }, "Ajouter au registre actif")
+                ]),
+                React.createElement('button', {
+                    key:'cls', onClick: onClose,
+                    className:"w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 flex items-center justify-center text-slate-400 transition-colors"
+                }, React.createElement('i', { className:"fa-solid fa-xmark text-xs" }))
+            ]),
 
-        const ARCHIVED_STAFF = [
-            { id: "a1", name: "EL MAROUNI Abdelati", entryDate: "2025-03-01", exitDate: "2025-11-15", role: "Ancien Collaborateur" },
-            { id: "a2", name: "MDAGHRI ALAOUI Fatimzahra", entryDate: "2025-07-15", exitDate: "2025-12-16", role: "Ancien Collaborateur" },
-            { id: "a3", name: "LAAZIZI Hafida", entryDate: "2025-08-01", exitDate: "2025-12-17", role: "Ancien Collaborateur" },
-            { id: "a4", name: "BOUAID Mina", entryDate: "2025-11-07", exitDate: "2025-12-25", role: "Ancien Collaborateur" },
-            { id: "a5", name: "FILALI Zineb", entryDate: "2025-12-21", exitDate: "2025-12-31", role: "Ancien Collaborateur" },
-            { id: "a6", name: "LABRAHMI Adham", entryDate: "2025-11-17", exitDate: "2025-11-30", role: "Ancien Collaborateur" },
-            { id: "a7", name: "GABOULI Aymen", entryDate: "2025-10-05", exitDate: "2025-12-21", role: "Ancien Collaborateur" },
-            { id: "a8", name: "EL MOUDENE El Hassan", entryDate: "2025-01-01", exitDate: "2026-01-31", role: "Ancien Collaborateur" },
-             { id: "a8", name: "GUETIBI Amine", entryDate: "2026-01-01", exitDate: "2026-03-31", role: "Ancien Collaborateur" }
-        ];
+            // Form
+            React.createElement('div', { key:'form', className:"px-6 py-5 space-y-4" }, [
+                // Nom complet
+                React.createElement('div', { key:'f-name' }, [
+                    React.createElement('label', { className: labelCls }, "Nom & Prénom"),
+                    React.createElement('input', {
+                        type:'text', className:'gc-input', placeholder:"EX: ALAMI Mohammed",
+                        value: form.name,
+                        onChange: e => set('name', e.target.value)
+                    })
+                ]),
+                // Département + Rôle côte à côte
+                React.createElement('div', { key:'f-dept-role', className:"grid grid-cols-2 gap-3" }, [
+                    React.createElement('div', { key:'dept' }, [
+                        React.createElement('label', { className: labelCls }, "Département"),
+                        React.createElement('select', {
+                            className:'gc-input', value: form.department,
+                            onChange: e => handleDeptChange(e.target.value)
+                        }, DEPARTMENTS.map(d => React.createElement('option', { key:d, value:d }, d)))
+                    ]),
+                    React.createElement('div', { key:'role' }, [
+                        React.createElement('label', { className: labelCls }, "Rôle / Fonction"),
+                        React.createElement('select', {
+                            className:'gc-input', value: form.role,
+                            onChange: e => set('role', e.target.value)
+                        }, availableRoles.map(r => React.createElement('option', { key:r, value:r }, r)))
+                    ])
+                ]),
+                // Date d'entrée
+                React.createElement('div', { key:'f-date' }, [
+                    React.createElement('label', { className: labelCls }, "Date d'entrée"),
+                    React.createElement('input', {
+                        type:'date', className:'gc-input', value: form.entryDate,
+                        onChange: e => set('entryDate', e.target.value)
+                    })
+                ]),
+                // Error
+                error && React.createElement('p', { key:'err', className:"text-[10px] text-rose-400 font-medium flex items-center gap-1.5" }, [
+                    React.createElement('i', { className:"fa-solid fa-triangle-exclamation" }),
+                    error
+                ])
+            ]),
 
-        // --- COMPOSANTS ---
-        const DateBadge = ({ date, variant = 'entry' }) => {
-            const styles = {
-                entry: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-                exit: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-                neutral: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
-            };
-            return React.createElement('span', {
-                className: `font-mono text-[10px] font-bold px-2 py-0.5 rounded border ${styles[variant]} whitespace-nowrap`
-            }, date);
-        };
-
-        const StaffCard = ({ member }) => {
-            return React.createElement('div', {
-                className: "group bg-white dark:bg-[#1a1f26] border border-slate-200 dark:border-white/5 p-4 rounded-xl flex items-center gap-4 transition-all duration-300 hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 dark:hover:shadow-blue-500/10 hover:-translate-y-0.5 shadow-sm"
-            }, [
-                React.createElement('div', {
-                    key: 'initials',
-                    className: "w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center font-bold text-xs text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-white/5 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-colors"
-                }, member.initials),
-                React.createElement('div', {
-                    key: 'info',
-                    className: "flex-grow min-w-0"
+            // Footer
+            React.createElement('div', { key:'ft', className:"px-6 pb-5 flex gap-3 justify-end" }, [
+                React.createElement('button', {
+                    key:'cancel', onClick: onClose,
+                    className:"px-4 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                }, "Annuler"),
+                React.createElement('button', {
+                    key:'save', onClick: handleSubmit,
+                    className:"px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-lg transition-colors flex items-center gap-2"
                 }, [
-                    React.createElement('h3', { key: 'name', className: "font-bold text-slate-800 dark:text-slate-200 uppercase text-[11px] tracking-tight truncate" }, member.name),
-                    React.createElement('p', { key: 'role', className: "text-[9px] text-slate-500 font-medium mb-2 truncate" }, member.role),
-                    React.createElement('div', { key: 'footer', className: "flex justify-between items-center gap-2" }, [
-                        React.createElement('span', { key: 'label', className: "text-[8px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-tighter" }, "Entrée"),
-                        React.createElement(DateBadge, { key: 'date', date: member.entryDate, variant: 'entry' })
-                    ])
+                    React.createElement('i', { key:'ic', className:"fa-solid fa-user-plus text-[10px]" }),
+                    "Ajouter"
                 ])
-            ]);
-        };
+            ])
+        ])
+    );
+};
 
-        const ArchiveCard = ({ member }) => {
-            return React.createElement('div', {
-                className: "bg-slate-50 dark:bg-[#111418] border border-slate-200 dark:border-white/5 p-4 rounded-xl flex flex-col gap-3 transition-all opacity-80 hover:opacity-100 shadow-sm hover:shadow-md"
-            }, [
-                React.createElement('h3', { key: 'name', className: "font-bold text-slate-500 dark:text-gray-400 uppercase text-[11px] tracking-tight border-b border-slate-200 dark:border-white/5 pb-2 truncate" }, member.name),
-                React.createElement('div', { key: 'dates', className: "space-y-2" }, [
-                    React.createElement('div', { key: 'entry', className: "flex justify-between items-center gap-2" }, [
-                        React.createElement('span', { className: "text-[8px] font-black text-slate-400 dark:text-gray-600 uppercase" }, "Entrée"),
-                        React.createElement(DateBadge, { date: member.entryDate, variant: 'neutral' })
-                    ]),
-                    React.createElement('div', { key: 'exit', className: "flex justify-between items-center gap-2" }, [
-                        React.createElement('span', { className: "text-[8px] font-black text-rose-500 dark:text-rose-800 uppercase" }, "Sortie"),
-                        React.createElement(DateBadge, { date: member.exitDate, variant: 'exit' })
-                    ])
+// ---------- MODAL ARCHIVE ----------
+const ModalArchive = ({ member, onClose, onConfirm }) => {
+    const [exitDate, setExitDate] = useState(today());
+    const [error, setError] = useState('');
+
+    const handleConfirm = () => {
+        if (!exitDate) { setError("La date de sortie est obligatoire."); return; }
+        if (exitDate < member.entryDate) { setError("La date de sortie doit être après la date d'entrée."); return; }
+        onConfirm(member, exitDate);
+        onClose();
+    };
+
+    return React.createElement('div', {
+        className: "modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4",
+        style: { background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)' },
+        onClick: e => { if(e.target===e.currentTarget) onClose(); }
+    },
+        React.createElement('div', {
+            className:"modal-content bg-white dark:bg-[#161b23] border border-slate-200 dark:border-white/8 rounded-2xl w-full max-w-sm shadow-2xl"
+        }, [
+            // Header rose
+            React.createElement('div', { key:'hd', className:"flex items-center gap-3 px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/5" }, [
+                React.createElement('div', { key:'ico', className:"w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center" },
+                    React.createElement('i', { className:"fa-solid fa-box-archive text-rose-400 text-sm" })
+                ),
+                React.createElement('div', { key:'txt' }, [
+                    React.createElement('h2', { className:"text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight" }, "Archiver"),
+                    React.createElement('p',  { className:"text-[9px] text-slate-400 mt-0.5 truncate max-w-[220px]" }, member.name)
                 ])
-            ]);
-        };
+            ]),
 
-        const SectionHeader = ({ title, variant = 'primary' }) => {
-            const variantStyles = {
-                primary: 'border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 dark:from-slate-800/80 to-transparent',
-                archive: 'border-l-4 border-slate-400 dark:border-gray-500 bg-gradient-to-r from-slate-100 dark:from-gray-800/80 to-transparent',
-            };
-            return React.createElement('div', {
-                className: `px-4 py-2 my-6 rounded-r-lg ${variantStyles[variant]}`
-            }, React.createElement('h2', {
-                className: `text-[11px] font-black uppercase tracking-widest ${variant === 'primary' ? 'text-slate-800 dark:text-white' : 'text-slate-500 dark:text-gray-400'}`
-            }, title));
-        };
+            // Body
+            React.createElement('div', { key:'body', className:"px-6 py-5 space-y-4" }, [
+                React.createElement('p', { key:'info', className:"text-[10px] text-slate-400 leading-relaxed" },
+                    "Ce collaborateur sera retiré de l'effectif actif et déplacé dans les archives."
+                ),
+                React.createElement('div', { key:'date' }, [
+                    React.createElement('label', { className:"block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5" }, "Date de sortie"),
+                    React.createElement('input', {
+                        type:'date', className:'gc-input', value: exitDate,
+                        onChange: e => { setExitDate(e.target.value); setError(''); }
+                    })
+                ]),
+                error && React.createElement('p', { key:'err', className:"text-[10px] text-rose-400 font-medium flex items-center gap-1.5" }, [
+                    React.createElement('i', { className:"fa-solid fa-triangle-exclamation" }),
+                    error
+                ])
+            ]),
 
-        // --- APPLICATION PRINCIPALE ---
-        const App = () => {
-            const [search, setSearch] = useState('');
-            const [theme, setTheme] = useState('dark');
+            // Footer
+            React.createElement('div', { key:'ft', className:"px-6 pb-5 flex gap-3 justify-end" }, [
+                React.createElement('button', {
+                    key:'cancel', onClick: onClose,
+                    className:"px-4 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                }, "Annuler"),
+                React.createElement('button', {
+                    key:'confirm', onClick: handleConfirm,
+                    className:"px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-lg transition-colors flex items-center gap-2"
+                }, [
+                    React.createElement('i', { key:'ic', className:"fa-solid fa-box-archive text-[10px]" }),
+                    "Confirmer la sortie"
+                ])
+            ])
+        ])
+    );
+};
 
-            useEffect(() => {
-                document.body.className = theme;
-            }, [theme]);
+// ---------- TOAST ----------
+const Toast = ({ msg, type }) => {
+    const colors = { success:'bg-emerald-600', info:'bg-blue-600', error:'bg-rose-600' };
+    const icons  = { success:'fa-check-circle', info:'fa-circle-info', error:'fa-triangle-exclamation' };
+    return React.createElement('div', {
+        className: `toast fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 ${colors[type]} text-white text-xs font-bold px-5 py-3 rounded-full shadow-2xl`
+    }, [
+        React.createElement('i', { key:'ic', className:`fa-solid ${icons[type]} text-[11px]` }),
+        React.createElement('span', { key:'txt' }, msg)
+    ]);
+};
 
-            const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+// ---------- APP ----------
+const App = () => {
+    const [activeStaff,   setActiveStaff]   = useState(INITIAL_ACTIVE);
+    const [archivedStaff, setArchivedStaff] = useState(INITIAL_ARCHIVED);
+    const [search, setSearch]   = useState('');
+    const [theme,  setTheme]    = useState('dark');
+    const [showAdd,     setShowAdd]     = useState(false);
+    const [archiveMember, setArchiveMember] = useState(null); // member to archive
+    const [toast, setToast] = useState(null);
 
-            const filteredStaff = useMemo(() => {
-                if (!search) return ACTIVE_STAFF;
-                const s = search.toLowerCase();
-                return ACTIVE_STAFF.filter(m => 
-                    m.name.toLowerCase().includes(s) || 
-                    m.role.toLowerCase().includes(s) ||
-                    m.department.toLowerCase().includes(s)
-                );
-            }, [search]);
+    useEffect(() => { document.body.className = theme; }, [theme]);
 
-            const filteredArchive = useMemo(() => {
-                if (!search) return ARCHIVED_STAFF;
-                const s = search.toLowerCase();
-                return ARCHIVED_STAFF.filter(m => m.name.toLowerCase().includes(s));
-            }, [search]);
+    const showToast = (msg, type='success') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
-            const downloadPDF = () => {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF('p', 'mm', 'a4');
-                const today = new Date().toLocaleDateString('fr-FR');
-                
-                // En-tête professionnel
-                doc.setFillColor(245, 245, 245);
-                doc.rect(0, 0, 210, 40, 'F');
-                
-                doc.setFontSize(22);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(33, 37, 41);
-                doc.text("REGISTRE UNIQUE DU PERSONNEL", 15, 20);
-                
-                doc.setFontSize(10);
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(100, 100, 100);
-                doc.text("Société : Grey Corner", 15, 28);
-                doc.text("Date d'édition : " + today, 15, 33);
-                
-                // Section Personnel Actif
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(59, 130, 246);
-                doc.text("I. EFFECTIF ACTIF", 15, 52);
+    // Add new member
+    const handleAdd = useCallback(member => {
+        setActiveStaff(prev => [...prev, member]);
+        showToast(`${member.name} ajouté avec succès.`, 'success');
+    }, []);
 
-                const activeTableData = ACTIVE_STAFF.map(m => [
-                    m.name,
-                    m.role,
-                    m.department,
-                    m.entryDate
-                ]);
+    // Archive member
+    const handleArchiveConfirm = useCallback((member, exitDate) => {
+        setActiveStaff(prev => prev.filter(m => m.id !== member.id));
+        setArchivedStaff(prev => [{
+            id: 'arch_' + member.id,
+            name: member.name,
+            entryDate: member.entryDate,
+            exitDate,
+            role: member.role || "Ancien Collaborateur"
+        }, ...prev]);
+        showToast(`${member.name} archivé.`, 'info');
+    }, []);
 
-                doc.autoTable({
-                    startY: 58,
-                    head: [['NOM & PRÉNOM', 'FONCTION', 'DÉPARTEMENT', 'DATE D\'ENTRÉE']],
-                    body: activeTableData,
-                    theme: 'striped',
-                    headStyles: { 
-                        fillColor: [59, 130, 246], 
-                        fontSize: 9, 
-                        halign: 'center',
-                        fontStyle: 'bold' 
-                    },
-                    bodyStyles: { fontSize: 8, textColor: [50, 50, 50] },
-                    alternateRowStyles: { fillColor: [249, 250, 251] },
-                    columnStyles: {
-                        0: { fontStyle: 'bold', cellWidth: 60 },
-                        1: { cellWidth: 45 },
-                        2: { cellWidth: 40 },
-                        3: { halign: 'center' }
-                    },
-                    margin: { left: 15, right: 15 }
-                });
+    const filteredStaff = useMemo(() => {
+        if (!search) return activeStaff;
+        const s = search.toLowerCase();
+        return activeStaff.filter(m => m.name.toLowerCase().includes(s) || m.role.toLowerCase().includes(s) || m.department.toLowerCase().includes(s));
+    }, [search, activeStaff]);
 
-                // Section Personnel Sorti (Archives)
-                const finalY = doc.lastAutoTable.finalY + 15;
-                
-                if (finalY > 240) { doc.addPage(); }
-                
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(107, 114, 128);
-                doc.text("II. PERSONNEL SORTI (ARCHIVES)", 15, finalY > 240 ? 20 : finalY);
+    const filteredArchive = useMemo(() => {
+        if (!search) return archivedStaff;
+        const s = search.toLowerCase();
+        return archivedStaff.filter(m => m.name.toLowerCase().includes(s));
+    }, [search, archivedStaff]);
 
-                const archivedTableData = ARCHIVED_STAFF.map(m => [
-                    m.name,
-                    m.entryDate,
-                    m.exitDate,
-                    "Sorti"
-                ]);
+    const downloadPDF = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p','mm','a4');
+        const todayStr = new Date().toLocaleDateString('fr-FR');
+        doc.setFillColor(245,245,245); doc.rect(0,0,210,40,'F');
+        doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(33,37,41);
+        doc.text("REGISTRE UNIQUE DU PERSONNEL",15,20);
+        doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(100,100,100);
+        doc.text("Société : Grey Corner",15,28);
+        doc.text("Date d'édition : " + todayStr,15,33);
+        doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(59,130,246);
+        doc.text("I. EFFECTIF ACTIF",15,52);
+        doc.autoTable({
+            startY:58, head:[['NOM & PRÉNOM','FONCTION','DÉPARTEMENT',"DATE D'ENTRÉE"]],
+            body: activeStaff.map(m=>[m.name,m.role,m.department,m.entryDate]),
+            theme:'striped',
+            headStyles:{fillColor:[59,130,246],fontSize:9,halign:'center',fontStyle:'bold'},
+            bodyStyles:{fontSize:8,textColor:[50,50,50]},
+            alternateRowStyles:{fillColor:[249,250,251]},
+            columnStyles:{0:{fontStyle:'bold',cellWidth:60},1:{cellWidth:45},2:{cellWidth:40},3:{halign:'center'}},
+            margin:{left:15,right:15}
+        });
+        const finalY = doc.lastAutoTable.finalY+15;
+        const sy = finalY>240 ? (doc.addPage(), 20) : finalY;
+        doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(107,114,128);
+        doc.text("II. PERSONNEL SORTI (ARCHIVES)",15,sy);
+        doc.autoTable({
+            startY: sy+6, head:[["NOM & PRÉNOM","DATE D'ENTRÉE","DATE DE SORTIE","STATUT"]],
+            body: archivedStaff.map(m=>[m.name,m.entryDate,m.exitDate,"Sorti"]),
+            theme:'grid',
+            headStyles:{fillColor:[107,114,128],fontSize:9,halign:'center',fontStyle:'bold'},
+            bodyStyles:{fontSize:8,textColor:[100,100,100]},
+            columnStyles:{0:{fontStyle:'bold',cellWidth:70},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'}},
+            margin:{left:15,right:15}
+        });
+        const pc = doc.internal.getNumberOfPages();
+        for(let i=1;i<=pc;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(150,150,150);doc.text(`Page ${i} sur ${pc}`,195,285,{align:'right'});}
+        doc.save(`Registre_Personnel_GreyCorner_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
 
-                doc.autoTable({
-                    startY: (finalY > 240 ? 26 : finalY + 6),
-                    head: [['NOM & PRÉNOM', 'DATE D\'ENTRÉE', 'DATE DE SORTIE', 'STATUT']],
-                    body: archivedTableData,
-                    theme: 'grid',
-                    headStyles: { 
-                        fillColor: [107, 114, 128], 
-                        fontSize: 9, 
-                        halign: 'center',
-                        fontStyle: 'bold' 
-                    },
-                    bodyStyles: { fontSize: 8, textColor: [100, 100, 100] },
-                    columnStyles: {
-                        0: { fontStyle: 'bold', cellWidth: 70 },
-                        1: { halign: 'center' },
-                        2: { halign: 'center' },
-                        3: { halign: 'center' }
-                    },
-                    margin: { left: 15, right: 15 }
-                });
+    return React.createElement(React.Fragment, null, [
+        // App container
+        React.createElement('div', { key:'app', className:"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen transition-colors duration-300" }, [
 
-                // Footer pagination
-                const pageCount = doc.internal.getNumberOfPages();
-                for (let i = 1; i <= pageCount; i++) {
-                    doc.setPage(i);
-                    doc.setFontSize(8);
-                    doc.setTextColor(150, 150, 150);
-                    doc.text(`Page ${i} sur ${pageCount}`, 195, 285, { align: 'right' });
-                }
-
-                doc.save(`Registre_Personnel_GreyCorner_${new Date().toISOString().split('T')[0]}.pdf`);
-            };
-
-            return React.createElement('div', {
-                className: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen transition-colors duration-300"
-            }, [
-                // Header
-                React.createElement('header', { key: 'header', className: "mb-10 flex flex-col sm:flex-row justify-between items-start gap-6" }, [
-                    React.createElement('div', { key: 'title-section', className: "flex flex-col" }, [
-                        React.createElement('div', { className: "flex items-center gap-3" }, [
-                            React.createElement('h1', { className: "text-4xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-none" }, [
-                                "Staff Hub ", React.createElement('span', { className: "text-blue-500" }, ".")
-                            ]),
-                            React.createElement('div', { className: "flex gap-2" }, [
-                                React.createElement('button', {
-                                    key: 'theme-toggle',
-                                    onClick: toggleTheme,
-                                    className: "p-2 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300",
-                                    title: "Changer de thème"
-                                }, React.createElement('i', { className: `fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'} text-sm` })),
-                                React.createElement('button', {
-                                    key: 'pdf-btn',
-                                    onClick: downloadPDF,
-                                    className: "p-2 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors text-slate-600 dark:text-slate-300 hover:text-white",
-                                    title: "Exporter en PDF"
-                                }, React.createElement('i', { className: "fa-solid fa-file-pdf text-sm" }))
-                            ])
+            // HEADER
+            React.createElement('header', { key:'hdr', className:"mb-10 flex flex-col sm:flex-row justify-between items-start gap-6" }, [
+                React.createElement('div', { key:'title-section', className:"flex flex-col" }, [
+                    React.createElement('div', { className:"flex items-center gap-3" }, [
+                        React.createElement('h1', { className:"text-4xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-none" }, [
+                            "Staff Hub ", React.createElement('span', { className:"text-blue-500" }, ".")
                         ]),
-                        React.createElement('p', { className: "text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-[0.2em] mt-3 flex items-center gap-2" }, [
-                            React.createElement('span', { className: "w-2 h-2 rounded-full bg-blue-500 animate-pulse" }),
-                            "Gestion du Personnel • Grey Corner"
+                        React.createElement('div', { className:"flex gap-2" }, [
+                            React.createElement('button', { key:'theme', onClick:()=>setTheme(p=>p==='dark'?'light':'dark'),
+                                className:"p-2 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300",
+                                title:"Changer de thème"
+                            }, React.createElement('i', { className:`fa-solid ${theme==='dark'?'fa-sun':'fa-moon'} text-sm` })),
+                            React.createElement('button', { key:'pdf', onClick:downloadPDF,
+                                className:"p-2 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors text-slate-600 dark:text-slate-300 hover:text-white",
+                                title:"Exporter en PDF"
+                            }, React.createElement('i', { className:"fa-solid fa-file-pdf text-sm" }))
                         ])
                     ]),
-                    React.createElement('div', { key: 'controls', className: "flex items-center gap-8 w-full sm:w-auto" }, [
-                        React.createElement('div', { className: "relative flex-grow sm:flex-grow-0 group" }, [
-                            React.createElement('i', { className: "fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs transition-colors group-focus-within:text-blue-500" }),
-                            React.createElement('input', {
-                                type: "text",
-                                placeholder: "Rechercher...",
-                                value: search,
-                                onChange: (e) => setSearch(e.target.value),
-                                className: "bg-white dark:bg-[#1a1f26] border border-slate-200 dark:border-white/10 rounded-full py-2.5 pl-10 pr-4 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500/50 w-full sm:w-64 transition-all focus:shadow-[0_0_20px_rgba(59,130,246,0.1)] shadow-sm"
-                            })
-                        ]),
-                        React.createElement('div', { className: "text-right hidden xs:block" }, [
-                            React.createElement('div', { className: "text-3xl font-black text-slate-900 dark:text-white leading-none font-mono" }, filteredStaff.length),
-                            React.createElement('div', { className: "text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1" }, "Effectif Actif")
-                        ])
+                    React.createElement('p', { className:"text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-[0.2em] mt-3 flex items-center gap-2" }, [
+                        React.createElement('span', { className:"w-2 h-2 rounded-full bg-blue-500 animate-pulse" }),
+                        "Gestion du Personnel • Grey Corner"
                     ])
                 ]),
-
-                // Main Content
-                React.createElement('main', { key: 'main', className: "space-y-12 pb-20" }, [
-                    React.createElement('div', { key: 'active-sections', className: "space-y-10" }, [
-                        DEPARTMENTS.map(dept => {
-                            const members = filteredStaff.filter(m => m.department === dept);
-                            if (members.length === 0) return null;
-                            return React.createElement('section', { key: dept }, [
-                                React.createElement(SectionHeader, { title: dept }),
-                                React.createElement('div', { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" }, 
-                                    members.map(m => React.createElement(StaffCard, { key: m.id, member: m }))
-                                )
-                            ]);
-                        }),
-                        filteredStaff.length === 0 && React.createElement('div', { className: "py-20 text-center" }, [
-                            React.createElement('i', { className: "fa-solid fa-user-slash text-4xl text-slate-300 dark:text-slate-800 mb-4" }),
-                            React.createElement('p', { className: "text-slate-400 dark:text-slate-500 text-sm font-medium" }, `Aucun collaborateur trouvé pour "${search}"`)
-                        ])
+                React.createElement('div', { key:'controls', className:"flex items-center gap-4 w-full sm:w-auto" }, [
+                    // Search
+                    React.createElement('div', { className:"relative flex-grow sm:flex-grow-0 group" }, [
+                        React.createElement('i', { className:"fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs transition-colors group-focus-within:text-blue-500" }),
+                        React.createElement('input', {
+                            type:"text", placeholder:"Rechercher...", value:search,
+                            onChange: e=>setSearch(e.target.value),
+                            className:"bg-white dark:bg-[#1a1f26] border border-slate-200 dark:border-white/10 rounded-full py-2.5 pl-10 pr-4 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500/50 w-full sm:w-64 transition-all focus:shadow-[0_0_20px_rgba(59,130,246,0.1)] shadow-sm"
+                        })
                     ]),
+                    // Add button
+                    React.createElement('button', {
+                        key:'add-btn', onClick:()=>setShowAdd(true),
+                        className:"flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black rounded-full transition-colors shadow-lg shadow-blue-500/20 whitespace-nowrap"
+                    }, [
+                        React.createElement('i', { key:'ic', className:"fa-solid fa-user-plus text-[10px]" }),
+                        React.createElement('span', { key:'tx' }, "Ajouter")
+                    ]),
+                    // Counter
+                    React.createElement('div', { className:"text-right hidden xs:block" }, [
+                        React.createElement('div', { className:"text-3xl font-black text-slate-900 dark:text-white leading-none font-mono" }, filteredStaff.length),
+                        React.createElement('div', { className:"text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1" }, "Effectif Actif")
+                    ])
+                ])
+            ]),
 
-                    filteredArchive.length > 0 && React.createElement('section', { key: 'archives', className: "mt-20 pt-10 border-t border-slate-200 dark:border-white/5" }, [
-                        React.createElement(SectionHeader, { title: "Archives (Sorties)", variant: "archive" }),
-                        React.createElement('div', { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" }, 
-                            filteredArchive.map(m => React.createElement(ArchiveCard, { key: m.id, member: m }))
-                        )
+            // MAIN
+            React.createElement('main', { key:'main', className:"space-y-12 pb-24" }, [
+                React.createElement('div', { key:'active', className:"space-y-10" }, [
+                    ...DEPARTMENTS.map(dept => {
+                        const members = filteredStaff.filter(m => m.department === dept);
+                        if (!members.length) return null;
+                        return React.createElement('section', { key:dept }, [
+                            React.createElement(SectionHeader, { title:dept }),
+                            React.createElement('div', { className:"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" },
+                                members.map(m => React.createElement(StaffCard, { key:m.id, member:m, onArchive:setArchiveMember }))
+                            )
+                        ]);
+                    }),
+                    filteredStaff.length===0 && React.createElement('div', { key:'empty', className:"py-20 text-center" }, [
+                        React.createElement('i', { className:"fa-solid fa-user-slash text-4xl text-slate-300 dark:text-slate-800 mb-4" }),
+                        React.createElement('p',  { className:"text-slate-400 dark:text-slate-500 text-sm font-medium" }, `Aucun collaborateur trouvé pour "${search}"`)
                     ])
                 ]),
+                filteredArchive.length>0 && React.createElement('section', { key:'arch', className:"mt-20 pt-10 border-t border-slate-200 dark:border-white/5" }, [
+                    React.createElement(SectionHeader, { title:`Archives (Sorties) — ${filteredArchive.length}`, variant:"archive" }),
+                    React.createElement('div', { className:"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" },
+                        filteredArchive.map(m => React.createElement(ArchiveCard, { key:m.id, member:m }))
+                    )
+                ])
+            ])
+        ]),
 
-                // Floating Action Button
-                React.createElement('div', { key: 'fab', className: "fixed bottom-6 right-6 sm:hidden" }, 
-                    React.createElement('div', {
-                        className: "bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center font-black text-xl border-4 border-slate-100 dark:border-[#0f1115]"
-                    }, filteredStaff.length)
-                )
-            ]);
-        };
+        // FAB mobile
+        React.createElement('button', {
+            key:'fab', onClick:()=>setShowAdd(true),
+            className:"fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-500 text-white w-14 h-14 rounded-full shadow-2xl shadow-blue-500/30 flex items-center justify-center transition-colors sm:hidden border-4 border-slate-100 dark:border-[#0f1115]"
+        }, React.createElement('i', { className:"fa-solid fa-user-plus text-lg" })),
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
-    </script>
+        // Modals
+        showAdd && React.createElement(ModalAdd, { key:'modal-add', onClose:()=>setShowAdd(false), onAdd:handleAdd }),
+        archiveMember && React.createElement(ModalArchive, {
+            key:'modal-arch', member:archiveMember,
+            onClose:()=>setArchiveMember(null),
+            onConfirm:handleArchiveConfirm
+        }),
+
+        // Toast
+        toast && React.createElement(Toast, { key:'toast', msg:toast.msg, type:toast.type })
+    ]);
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
+</script>
 </body>
 </html>
